@@ -1,0 +1,12 @@
+#!/bin/bash
+set -e
+
+echo "📝 .env 파일 생성 중..."
+cat > .env << EOF
+POINT_SERVER_ADDRESS=$POINT_SERVER_ADDRESS
+POINT_MANAGER_ADDRESS=$POINT_MANAGER_ADDRESS
+BASE_SEPOLIA_URL=$BASE_SEPOLIA_URL
+PRIVATE_KEY=$PRIVATE_KEY
+BASESCAN_API_KEY=$BASESCAN_API_KEY
+EOF
+echo "✅ .env 파일 생성 완료"

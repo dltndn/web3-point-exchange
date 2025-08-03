@@ -1,0 +1,171 @@
+services:
+  # 1. Frontend (Next.js)
+  frontend:
+    build:
+      context: ./frontend
+      target: dev # 개발 환경에서는 'dev' 스테이지 사용
+      args:
+        - NEXT_PUBLIC_API_BASE_URL=http://backend:3000
+        - NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=${NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID}
+        - NEXT_PUBLIC_BLOOM_TOKEN_ADDRESS=${NEXT_PUBLIC_BLOOM_TOKEN_ADDRESS}
+        - NEXT_PUBLIC_POINT_MANAGER_ADDRESS=${POINT_MANAGER_ADDRESS}
+    container_name: frontend
+    ports:
+      - "3000:3000" # 호스트:컨테이너 포트 매핑
+    volumes:
+      - ./frontend:/app # 소스 코드 마운트 (핫 리로딩)
+      - /app/node_modules # node_modules는 컨테이너 내의 것을 사용
+      - /app/.next
+    environment:
+      - NEXT_PUBLIC_API_BASE_URL=http://backend:3000
+      - NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=${NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID}
+      - NEXT_PUBLIC_BLOOM_TOKEN_ADDRESS=${NEXT_PUBLIC_BLOOM_TOKEN_ADDRESS}
+      - NEXT_PUBLIC_POINT_MANAGER_ADDRESS=${POINT_MANAGER_ADDRESS}
+    networks:
+      - point-project-network
+    depends_on:
+      - backend
+
+  # 2. Backend (NestJS)
+  backend:
+    build:
+      context: ./backend
+      target: dev
+    container_name: backend
+    ports:
+      - "3001:3000" # 백엔드는 3001 포트로 접근
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - SERVER_PORT=3000
+      - DATABASE_HOST=db
+      - DATABASE_PORT=5432
+      - DATABASE_USER=user
+      - DATABASE_PASSWORD=password
+      - DATABASE_NAME=mydatabase
+      - REDIS_HOST=cache
+      - REDIS_PORT=6379
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASSWORD=password
+      - POINT_TOKEN_EXCHANGE_RATE=100
+      - POINT_MANAGER_CONTRACT_ADDRESS=${POINT_MANAGER_ADDRESS}
+      - POINT_TOKEN_ADDRESS=${NEXT_PUBLIC_BLOOM_TOKEN_ADDRESS}
+      - BASE_SEPOLIA_RPC_URL=${BASE_SEPOLIA_URL}
+      - POINT_MANAGER_OWNER_PRIVATE_KEY=${POINT_MANAGER_OWNER_PRIVATE_KEY}
+      - MANAGER_WALLET1_ADDRESS=${MANAGER_WALLET1_ADDRESS}
+      - MANAGER_WALLET1_PRIVATE_KEY=${MANAGER_WALLET1_PRIVATE_KEY}
+      - MANAGER_WALLET2_ADDRESS=${MANAGER_WALLET2_ADDRESS}
+      - MANAGER_WALLET2_PRIVATE_KEY=${MANAGER_WALLET2_PRIVATE_KEY}
+      - MANAGER_WALLET3_ADDRESS=${MANAGER_WALLET3_ADDRESS}
+      - MANAGER_WALLET3_PRIVATE_KEY=${MANAGER_WALLET3_PRIVATE_KEY}
+      - RELAYER_WALLET1_ADDRESS=${RELAYER_WALLET1_ADDRESS}
+      - RELAYER_WALLET1_PRIVATE_KEY=${RELAYER_WALLET1_PRIVATE_KEY}
+      - RELAYER_WALLET2_ADDRESS=${RELAYER_WALLET2_ADDRESS}
+      - RELAYER_WALLET2_PRIVATE_KEY=${RELAYER_WALLET2_PRIVATE_KEY}
+      - RELAYER_WALLET3_ADDRESS=${RELAYER_WALLET3_ADDRESS}
+      - RELAYER_WALLET3_PRIVATE_KEY=${RELAYER_WALLET3_PRIVATE_KEY}
+      - MAX_MANAGER_COUNT=3
+      - MAX_RELAYER_COUNT=3
+      - POINT_MANAGER_OWNER_ADDRESS=${POINT_MANAGER_OWNER_ADDRESS}
+    networks:
+      - point-project-network
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  # 3. Blockchain (Hardhat Dev Environment)
+  blockchain:
+    build:
+      context: ./blockchain
+      args:
+        - POINT_SERVER_ADDRESS=http://backend:3000
+        - POINT_MANAGER_ADDRESS=${POINT_MANAGER_ADDRESS}
+        - BASE_SEPOLIA_URL=${BASE_SEPOLIA_URL}
+        - PRIVATE_KEY=${POINT_MANAGER_OWNER_PRIVATE_KEY}
+        - BASESCAN_API_KEY=${BASESCAN_API_KEY}
+    container_name: blockchain
+    ports:
+      - "8545:8545"
+    volumes:
+      - ./blockchain:/app/blockchain # 로컬 blockchain 폴더와 동기화
+      - /app/blockchain/node_modules # node_modules는 컨테이너 내의 것을 사용
+    environment:
+      - POINT_SERVER_ADDRESS=http://backend:3000
+      - POINT_MANAGER_ADDRESS=${POINT_MANAGER_ADDRESS}
+      - BASE_SEPOLIA_URL=${BASE_SEPOLIA_URL}
+      - PRIVATE_KEY=${POINT_MANAGER_OWNER_PRIVATE_KEY}
+      - BASESCAN_API_KEY=${BASESCAN_API_KEY}
+    networks:
+      - point-project-network
+    depends_on:
+      - backend
+
+  # 4. Database (PostgreSQL)
+  db:
+    image: postgres:15-alpine
+    container_name: db
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=mydatabase
+    ports:
+      - "5432:5432" # DB 관리 도구 연결을 위해 포트 개방
+    volumes:
+      - postgres-data:/var/lib/postgresql/data # 데이터 영속성 보장
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d mydatabase"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - point-project-network
+
+  # 5. Cache (Redis)
+  cache:
+    image: redis:7-alpine
+    container_name: cache
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - point-project-network
+
+  # 6. Message Queue (RabbitMQ)
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=password
+    ports:
+      - "5672:5672"   # AMQP 포트
+      - "15672:15672" # 관리 웹 UI 포트
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq # 데이터 영속성 보장
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running", "-q"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+    networks:
+      - point-project-network
+
+# 서비스들이 통신할 공용 네트워크 정의
+networks:
+  point-project-network:
+    driver: bridge
+
+# PostgreSQL 데이터베이스 데이터를 저장할 명명된 볼륨 정의
+volumes:
+  postgres-data:
+  rabbitmq-data:
