@@ -104,11 +104,11 @@ export class PointService {
   async createUserPoint(
     createUserPointDto: CreateUserPointReqDto,
   ): Promise<UserPointResDto> {
-    return await this.dataSource.transaction(async (entityManager) => {
-      const { userId, walletAddress, amount = '0' } = createUserPointDto;
-      const balance = BigInt(amount);
+    const { userId, walletAddress, amount = '0' } = createUserPointDto;
+    const balance = BigInt(amount);
+    let shouldSetValidUser = false;
 
-      // User 엔티티가 존재하지 않으면 생성
+    const result = await this.dataSource.transaction(async (entityManager) => {
       if (walletAddress) {
         const existingUser =
           await this.userRepository.findByWalletAddress(walletAddress);
@@ -119,12 +119,11 @@ export class PointService {
             walletAddress,
             entityManager,
           );
-
-          await this.blockchainService.setValidUser(walletAddress, true);
+          shouldSetValidUser = true;
         }
       }
 
-      // UserPoint 엔티티 생성
+      // UserPoint 엔티티 생성 (임시 코드)
       const userPointEntity = await this.userPointRepository.create(
         userId,
         balance,
@@ -133,6 +132,13 @@ export class PointService {
 
       return this.mapUserPoint(userPointEntity);
     });
+
+    // 트랜잭션 완료 후 블록체인 호출
+    if (shouldSetValidUser && walletAddress) {
+      await this.blockchainService.setValidUser(walletAddress, true);
+    }
+
+    return result;
   }
 
   /**
