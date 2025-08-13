@@ -137,12 +137,12 @@ export default function SwapHistoryList({ className = '' }: SwapHistoryListProps
                     </span>
                   </div>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {parseInt(history.amount_point).toLocaleString()}P ↔ {formatTokenAmount(history.amount_token)}BT
+                    {parseInt(history.amount_point).toLocaleString()}P ↔ {history.amount_token}BT
                   </p>
                 </div>
                 <div className="text-right">
                   <p className="text-lg font-semibold text-blue-600 dark:text-blue-400">
-                    {history.type === SWAP_TYPES.POINT_TO_TOKEN ? '+' : '-'}{formatTokenAmount(history.amount_token)}BT
+                    {history.type === SWAP_TYPES.POINT_TO_TOKEN ? '+' : '-'}{history.amount_token}BT
                   </p>
                 </div>
               </div>
